@@ -1,26 +1,64 @@
+
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* Colores de marca Bulonfer */
+  --color-bulonfer-gris: #e8e9ea;
+  --color-bulonfer-blue: #0e3e5e;
+  --color-bulonfer-teal: #00b7ce;
+
+  /* Variantes de blue */
+  --color-bulonfer-blue-100: #6e8b9e;
+  --color-bulonfer-blue-200: #3e657e;
+  --color-bulonfer-blue-300: #0e3e5e;
+  --color-bulonfer-blue-400: #002545;
+  --color-bulonfer-blue-500: #000b2b;
+
+  /* Variantes de teal */
+  --color-bulonfer-teal-100: #ccf1f5;
+  --color-bulonfer-teal-200: #66d4e2;
+  --color-bulonfer-teal-300: #00b7ce;
+  --color-bulonfer-teal-400: #00849b;
+  --color-bulonfer-teal-500: #005168;
+
+  /* Escala de grises */
+  --color-bulonfer-gray-50: #fafafa;
+  --color-bulonfer-gray-100: #f2f2f2;
+  --color-bulonfer-gray-200: #e1e1e1;
+  --color-bulonfer-gray-300: #bcbcbc;
+  --color-bulonfer-gray-400: #9d9d9d;
+  --color-bulonfer-gray-500: #7b7b7b;
+  --color-bulonfer-gray-600: #616161;
+  --color-bulonfer-gray-700: #484848;
+  --color-bulonfer-gray-800: #2e2e2e;
+  --color-bulonfer-gray-900: #151515;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* La tele: pantalla completa, sin scroll, sin cursor */
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--color-bulonfer-blue-500);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  cursor: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+
+
+/* Animaciones del carousel */
+@keyframes slideFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.slide-enter {
+  animation: slideFadeIn 0.6s ease-out both;
 }
