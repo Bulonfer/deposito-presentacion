@@ -7,7 +7,7 @@ export const fetcher = (url: string) =>
 export const SLIDE_MS = 18000;
 /** Cada cuánto se refrescan los datos (ms). La BD sincroniza cada ~15 min. */
 export const REFRESH_MS = 10 * 60 * 1000;
-/** Días hacia atrás que muestra el gráfico de estado de líneas */
+/** Días que cubre el gráfico de "Estado de Líneas por Día". Las tarjetas siempre usan hoy. */
 export const RANGE_DAYS = 7;
 
 export const getLocalDateString = (date: Date) => {

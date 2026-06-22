@@ -10,12 +10,10 @@ import {
   YAxis,
   CartesianGrid,
   Legend,
-  Cell,
 } from "recharts";
 import {
   estadoLineas,
   remitosResumen,
-  remitosPorVendedor,
   productividadPorDia,
   ContabiliumAggregatedResponse,
 } from "@/app/utils/types";
@@ -26,7 +24,6 @@ import {
   RANGE_DAYS,
   getLocalDateString,
   formatFechaCorta,
-  formatVendedor,
   fmt,
   METRICAS,
   METRICAS_PRODUCTIVIDAD,
@@ -35,9 +32,6 @@ import {
 } from "@/app/lib/logistica";
 
 const swrOpts = { refreshInterval: REFRESH_MS, revalidateOnFocus: false };
-
-/** Top de vendedores que entran cómodos en la pantalla */
-const TOP_VENDEDORES = 12;
 
 export default function LogisticaCarousel() {
   // Rango: últimos RANGE_DAYS días, recalculado cuando cambia el día.
@@ -78,37 +72,31 @@ export default function LogisticaCarousel() {
     fetcher,
     swrOpts,
   );
-  const { data: remitosVendedor = [] } = useSWR<remitosPorVendedor[]>(
-    "/api/logistica/remitos_sin_liberacion_por_vendedor",
-    fetcher,
-    swrOpts,
-  );
   const { data: contabilium } = useSWR<ContabiliumAggregatedResponse>(
     `/api/facturacion/contabilium${range}`,
     fetcher,
     swrOpts,
   );
 
-  // --- Agregados (misma lógica que el dashboard) ---
-  const totales = useMemo(() => {
+  // --- Agregados ---
+  // Las tarjetas usan SOLO la fila de hoy; el gráfico (más abajo) usa toda la semana.
+  const hoyRow = useMemo(() => {
     const sorted = [...estado].sort((a, b) => a.fecha.localeCompare(b.fecha));
-    const last = sorted[sorted.length - 1];
-    const base = estado.reduce(
-      (acc, item) => {
-        acc.lineas_entrantes += Number(item.lineas_entrantes) || 0;
-        acc.lineas_facturadas += Number(item.lineas_facturadas) || 0;
-        return acc;
-      },
-      {
-        lineas_entrantes: 0,
-        lineas_facturadas: 0,
-        lineas_pendientes_logistica: Number(last?.lineas_pendientes_logistica) || 0,
-        lineas_pendientes_ctasctes: Number(last?.lineas_pendientes_ctasctes) || 0,
-      },
-    );
-    base.lineas_facturadas += contabilium?.itemsCount || 0;
-    return base;
-  }, [estado, contabilium]);
+    return sorted.find((d) => d.fecha === endDate) ?? sorted[sorted.length - 1];
+  }, [estado, endDate]);
+
+  const totales = useMemo(() => {
+    const facturadasContab = contabilium?.byDateCount?.[endDate] || 0;
+    return {
+      lineas_entrantes: Number(hoyRow?.lineas_entrantes) || 0,
+      lineas_facturadas:
+        (Number(hoyRow?.lineas_facturadas) || 0) + facturadasContab,
+      lineas_pendientes_logistica:
+        Number(hoyRow?.lineas_pendientes_logistica) || 0,
+      lineas_pendientes_ctasctes:
+        Number(hoyRow?.lineas_pendientes_ctasctes) || 0,
+    };
+  }, [hoyRow, contabilium, endDate]);
 
   const chartData = useMemo(() => {
     const byDateCount = contabilium?.byDateCount || {};
@@ -118,46 +106,32 @@ export default function LogisticaCarousel() {
         fechaCorta: formatFechaCorta(item.fecha),
         lineas_entrantes: Number(item.lineas_entrantes) || 0,
         lineas_facturadas:
-          (Number(item.lineas_facturadas) || 0) + (byDateCount[item.fecha] || 0),
-        lineas_pendientes_logistica: Number(item.lineas_pendientes_logistica) || 0,
-        lineas_pendientes_ctasctes: Number(item.lineas_pendientes_ctasctes) || 0,
+          (Number(item.lineas_facturadas) || 0) +
+          (byDateCount[item.fecha] || 0),
+        lineas_pendientes_logistica:
+          Number(item.lineas_pendientes_logistica) || 0,
+        lineas_pendientes_ctasctes:
+          Number(item.lineas_pendientes_ctasctes) || 0,
       }));
   }, [estado, contabilium]);
 
-  const snapshot = useMemo(() => {
-    const sorted = [...estado].sort((a, b) => a.fecha.localeCompare(b.fecha));
-    return sorted[sorted.length - 1];
-  }, [estado]);
+  const snapshot = hoyRow;
 
-  const totalesProductividad = useMemo(
-    () =>
-      productividad.reduce(
-        (acc, item) => {
-          acc.lineas_reposicion += Number(item.lineas_reposicion) || 0;
-          acc.lineas_preparadas += Number(item.lineas_preparadas) || 0;
-          acc.lineas_empaquetadas += Number(item.lineas_empaquetadas) || 0;
-          return acc;
-        },
-        { lineas_reposicion: 0, lineas_preparadas: 0, lineas_empaquetadas: 0 },
-      ),
-    [productividad],
-  );
-
-  const remitosChartData = useMemo(
-    () =>
-      [...remitosVendedor]
-        .sort((a, b) => b.cantidad_remitos - a.cantidad_remitos)
-        .slice(0, TOP_VENDEDORES)
-        .map((item) => ({ ...item, nombre: formatVendedor(item.vendedor) })),
-    [remitosVendedor],
-  );
+  const totalesProductividad = useMemo(() => {
+    const hoy = productividad.find((d) => d.fecha === endDate);
+    return {
+      lineas_reposicion: Number(hoy?.lineas_reposicion) || 0,
+      lineas_preparadas: Number(hoy?.lineas_preparadas) || 0,
+      lineas_empaquetadas: Number(hoy?.lineas_empaquetadas) || 0,
+    };
+  }, [productividad, endDate]);
 
   // --- Definición de slides ---
   const slides = useMemo(
     () => [
       {
         title: "Estado de Líneas por Día",
-        subtitle: `${startDate} → ${endDate}`,
+        subtitle: `Hoy ${endDate} · gráfico últimos ${RANGE_DAYS} días`,
         content: (
           <div className="flex min-h-0 flex-1 flex-col gap-8">
             <CardRow
@@ -173,7 +147,11 @@ export default function LogisticaCarousel() {
                   data={chartData}
                   margin={{ top: 20, right: 20, left: 10, bottom: 10 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1d5273" />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="#1d5273"
+                  />
                   <XAxis
                     dataKey="fechaCorta"
                     interval={0}
@@ -186,7 +164,11 @@ export default function LogisticaCarousel() {
                     tickFormatter={(v) => Number(v).toLocaleString("es-AR")}
                   />
                   <Legend
-                    wrapperStyle={{ paddingTop: 12, fontSize: 20, fontWeight: 600 }}
+                    wrapperStyle={{
+                      paddingTop: 12,
+                      fontSize: 20,
+                      fontWeight: 600,
+                    }}
                     formatter={(value) => (
                       <span style={{ color: "#e8f4fb" }}>{value}</span>
                     )}
@@ -208,7 +190,7 @@ export default function LogisticaCarousel() {
       },
       {
         title: "Productividad por Equipo",
-        subtitle: `${startDate} → ${endDate}`,
+        subtitle: `Hoy ${endDate}`,
         content: (
           <div className="flex flex-1 items-center">
             <CardRow
@@ -242,9 +224,12 @@ export default function LogisticaCarousel() {
         title: "Remitos Sin Liberación",
         subtitle: "Pendientes de liberar",
         content: (
-          <div className="flex min-h-0 flex-1 flex-col gap-8">
+          <div className="flex flex-1 items-center">
             <CardRow
-              cards={REMITOS_CARDS.map((c) => ({
+              big
+              cards={REMITOS_CARDS.filter(
+                (c) => c.key !== "valor_declarado_sin_iva",
+              ).map((c) => ({
                 label: c.label,
                 color: c.color,
                 value: remitosResumenData
@@ -252,68 +237,30 @@ export default function LogisticaCarousel() {
                   : "—",
               }))}
             />
-            <div className="flex min-h-0 flex-1 flex-col">
-              <p className="mb-2 text-center text-xl font-bold uppercase tracking-wide text-bulonfer-teal-200">
-                Remitos por Vendedor
-              </p>
-              <div className="min-h-0 flex-1">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  layout="vertical"
-                  data={remitosChartData}
-                  margin={{ top: 4, right: 60, left: 8, bottom: 24 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1d5273" />
-                  <XAxis
-                    type="number"
-                    tick={{ fill: "#cbe3f0", fontSize: 18 }}
-                    stroke="#3e657e"
-                    tickFormatter={(v) => Number(v).toLocaleString("es-AR")}
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="nombre"
-                    width={220}
-                    tick={{ fill: "#e8f4fb", fontSize: 18, fontWeight: 600 }}
-                    stroke="#3e657e"
-                  />
-                  <Bar dataKey="cantidad_remitos" name="Remitos" radius={[0, 6, 6, 0]}>
-                    {remitosChartData.map((_, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={index === 0 ? "#38BDF8" : index === 1 ? "#0EA5E9" : "#0E6E96"}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-              </div>
-            </div>
           </div>
         ),
       },
     ],
     [
-      startDate,
       endDate,
       totales,
       chartData,
       totalesProductividad,
       snapshot,
       remitosResumenData,
-      remitosChartData,
     ],
   );
 
   // --- Rotación ---
   const [index, setIndex] = useState(0);
+  // El contador se reinicia al cambiar de slide (incluida la navegación manual).
   useEffect(() => {
-    const id = setInterval(
+    const id = setTimeout(
       () => setIndex((i) => (i + 1) % slides.length),
       SLIDE_MS,
     );
-    return () => clearInterval(id);
-  }, [slides.length]);
+    return () => clearTimeout(id);
+  }, [index, slides.length]);
 
   const current = slides[index];
 
@@ -321,17 +268,14 @@ export default function LogisticaCarousel() {
     <main className="flex h-screen w-screen flex-col bg-linear-to-br from-bulonfer-blue to-bulonfer-blue-500 px-14 pt-10 pb-8 text-white">
       <Header subtitle={current.subtitle} />
 
-      <section
-        key={index}
-        className="slide-enter flex min-h-0 flex-1 flex-col"
-      >
+      <section key={index} className="slide-enter flex min-h-0 flex-1 flex-col">
         <h2 className="mb-6 text-5xl font-extrabold tracking-tight text-white">
           {current.title}
         </h2>
         {current.content}
       </section>
 
-      <Dots count={slides.length} active={index} />
+      <Dots count={slides.length} active={index} onSelect={setIndex} />
     </main>
   );
 }
@@ -377,10 +321,12 @@ function Header({ subtitle }: { subtitle: string }) {
 type CardData = { label: string; color: string; value: string };
 
 function CardRow({ cards, big = false }: { cards: CardData[]; big?: boolean }) {
-  // El valor más largo define el tamaño de fuente para que ninguno desborde.
+  // El valor más largo define el tamaño de fuente para que ninguno desborde ni corte línea.
   const maxLen = Math.max(...cards.map((c) => c.value.length));
   const valueSize = big
-    ? "text-8xl"
+    ? maxLen > 9
+      ? "text-6xl"
+      : "text-8xl"
     : cards.length >= 4 || maxLen > 9
       ? "text-5xl"
       : "text-7xl";
@@ -402,7 +348,7 @@ function CardRow({ cards, big = false }: { cards: CardData[]; big?: boolean }) {
             {c.label}
           </h3>
           <p
-            className={`font-extrabold tabular-nums leading-none text-white ${valueSize}`}
+            className={`whitespace-nowrap font-extrabold tabular-nums leading-none text-white ${valueSize}`}
           >
             {c.value}
           </p>
@@ -412,16 +358,31 @@ function CardRow({ cards, big = false }: { cards: CardData[]; big?: boolean }) {
   );
 }
 
-function Dots({ count, active }: { count: number; active: number }) {
+function Dots({
+  count,
+  active,
+  onSelect,
+}: {
+  count: number;
+  active: number;
+  onSelect: (i: number) => void;
+}) {
   return (
-    <div className="mt-6 flex items-center justify-center gap-3">
+    <div className="mt-6 flex items-center justify-center gap-4">
       {Array.from({ length: count }).map((_, i) => (
-        <span
+        <button
           key={i}
-          className={`h-3 rounded-full transition-all duration-500 ${
-            i === active ? "w-12 bg-bulonfer-teal" : "w-3 bg-white/25"
-          }`}
-        />
+          type="button"
+          aria-label={`Ir a la sección ${i + 1}`}
+          onClick={() => onSelect(i)}
+          className="group flex h-10 items-center px-1"
+        >
+          <span
+            className={`h-4 rounded-full transition-all duration-500 group-hover:bg-bulonfer-teal-200 ${
+              i === active ? "w-14 bg-bulonfer-teal" : "w-4 bg-white/25"
+            }`}
+          />
+        </button>
       ))}
     </div>
   );
