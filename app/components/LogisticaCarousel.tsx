@@ -227,6 +227,7 @@ export default function LogisticaCarousel() {
           <div className="flex flex-1 items-center">
             <CardRow
               big
+              shrink
               cards={REMITOS_CARDS.filter(
                 (c) => c.key !== "valor_declarado_sin_iva",
               ).map((c) => ({
@@ -320,16 +321,24 @@ function Header({ subtitle }: { subtitle: string }) {
 
 type CardData = { label: string; color: string; value: string };
 
-function CardRow({ cards, big = false }: { cards: CardData[]; big?: boolean }) {
+const VALUE_SIZES = ["text-8xl", "text-7xl", "text-6xl", "text-5xl", "text-4xl"];
+
+function CardRow({
+  cards,
+  big = false,
+  shrink = false,
+}: {
+  cards: CardData[];
+  big?: boolean;
+  /** Baja un escalón el tamaño del valor (para filas con unidades, ej. "kg"). */
+  shrink?: boolean;
+}) {
   // El valor más largo define el tamaño de fuente para que ninguno desborde ni corte línea.
   const maxLen = Math.max(...cards.map((c) => c.value.length));
-  const valueSize = big
-    ? maxLen > 9
-      ? "text-6xl"
-      : "text-8xl"
-    : cards.length >= 4 || maxLen > 9
-      ? "text-5xl"
-      : "text-7xl";
+  let sizeIdx = big ? 0 : 1;
+  if (maxLen > 9 || (!big && cards.length >= 4)) sizeIdx += 2;
+  if (shrink) sizeIdx += 1;
+  const valueSize = VALUE_SIZES[Math.min(sizeIdx, VALUE_SIZES.length - 1)];
   return (
     <div
       className="grid w-full gap-6"
