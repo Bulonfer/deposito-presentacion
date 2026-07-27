@@ -32,7 +32,7 @@ export const fmtMoneda = (v: number) =>
   });
 
 export const fmtPeso = (v: number) =>
-  `${Number(v || 0).toLocaleString("es-AR", { maximumFractionDigits: 2 })} kg`;
+  `${Number(v || 0).toLocaleString("es-AR", { maximumFractionDigits: 0 })} kg`;
 
 /** Acorta "Juan Carlos Perez Lopez" -> "Juan Lopez" */
 export const formatVendedor = (nombre: string) => {
@@ -41,11 +41,12 @@ export const formatVendedor = (nombre: string) => {
   return `${partes[0]} ${partes[partes.length - 1]}`;
 };
 
+/** `labelCard` usa \n para forzar el salto de línea en las tarjetas; la leyenda del gráfico usa `label`. */
 export const METRICAS = [
-  { key: "lineas_entrantes" as const, label: "Líneas Entrantes", color: "#38BDF8" },
-  { key: "lineas_facturadas" as const, label: "Líneas Facturadas", color: "#10B981" },
-  { key: "lineas_pendientes_logistica" as const, label: "Pendientes Logística", color: "#F59E0B" },
-  { key: "lineas_pendientes_ctasctes" as const, label: "Pendientes Ctas Ctes", color: "#EF4444" },
+  { key: "lineas_entrantes" as const, label: "Líneas Entrantes", labelCard: "Líneas\nEntrantes", color: "#38BDF8" },
+  { key: "lineas_facturadas" as const, label: "Líneas Facturadas", labelCard: "Líneas\nFacturadas", color: "#10B981" },
+  { key: "lineas_pendientes_logistica" as const, label: "Pendientes Logística", labelCard: "Pendientes\nLogística", color: "#F59E0B" },
+  { key: "lineas_pendientes_ctasctes" as const, label: "Pendientes Ctas Ctes", labelCard: "Pendientes\nCtas Ctes", color: "#EF4444" },
 ];
 
 export const METRICAS_PRODUCTIVIDAD = [

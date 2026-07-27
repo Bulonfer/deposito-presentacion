@@ -136,7 +136,7 @@ export default function LogisticaCarousel() {
           <div className="flex min-h-0 flex-1 flex-col gap-8">
             <CardRow
               cards={METRICAS.map((m) => ({
-                label: m.label,
+                label: m.labelCard,
                 color: m.color,
                 value: fmt(totales[m.key]),
               }))}
@@ -342,7 +342,9 @@ function CardRow({ cards, big = false }: { cards: CardData[]; big?: boolean }) {
           style={{ borderLeftColor: c.color }}
         >
           <h3
-            className="mb-3 truncate text-xl font-bold uppercase tracking-widest"
+            className={`mb-3 text-xl font-bold uppercase tracking-widest ${
+              c.label.includes("\n") ? "whitespace-pre-line" : "truncate"
+            }`}
             style={{ color: c.color }}
           >
             {c.label}
