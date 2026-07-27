@@ -330,14 +330,14 @@ function CardRow({
 }: {
   cards: CardData[];
   big?: boolean;
-  /** Baja un escalón el tamaño del valor (para filas con unidades, ej. "kg"). */
+  /** Baja dos escalones el tamaño del valor (para filas con unidades, ej. "kg"). */
   shrink?: boolean;
 }) {
   // El valor más largo define el tamaño de fuente para que ninguno desborde ni corte línea.
   const maxLen = Math.max(...cards.map((c) => c.value.length));
   let sizeIdx = big ? 0 : 1;
   if (maxLen > 9 || (!big && cards.length >= 4)) sizeIdx += 2;
-  if (shrink) sizeIdx += 1;
+  if (shrink) sizeIdx += 2;
   const valueSize = VALUE_SIZES[Math.min(sizeIdx, VALUE_SIZES.length - 1)];
   return (
     <div
