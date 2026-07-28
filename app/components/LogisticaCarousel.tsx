@@ -15,6 +15,9 @@ import {
   estadoLineas,
   remitosResumen,
   productividadPorDia,
+  seccionRecepcion,
+  seccionPendientesImportacion,
+  seccionPendientesMercaderia,
   ContabiliumAggregatedResponse,
 } from "@/app/utils/types";
 import {
@@ -28,6 +31,9 @@ import {
   METRICAS,
   METRICAS_PRODUCTIVIDAD,
   METRICAS_PENDIENTES_LOG,
+  RECEPCION_CARDS,
+  ACTIVACIONES_CARDS,
+  FACTURA_COMPRA_CARDS,
   REMITOS_CARDS,
 } from "@/app/lib/logistica";
 
@@ -74,6 +80,23 @@ export default function LogisticaCarousel() {
   );
   const { data: contabilium } = useSWR<ContabiliumAggregatedResponse>(
     `/api/facturacion/contabilium${range}`,
+    fetcher,
+    swrOpts,
+  );
+  // Recepción agrega todo el período en una sola fila: se pide solo hoy,
+  // igual que el filtro por defecto del dashboard.
+  const { data: recepcion } = useSWR<seccionRecepcion>(
+    `/api/logistica/seccion_recepcion?startDate=${endDate}&endDate=${endDate}`,
+    fetcher,
+    swrOpts,
+  );
+  const { data: activaciones } = useSWR<seccionPendientesImportacion>(
+    "/api/logistica/seccion_pendientes_importacion",
+    fetcher,
+    swrOpts,
+  );
+  const { data: facturaCompra } = useSWR<seccionPendientesMercaderia>(
+    "/api/logistica/seccion_pendientes_mercaderia",
     fetcher,
     swrOpts,
   );
@@ -189,22 +212,6 @@ export default function LogisticaCarousel() {
         ),
       },
       {
-        title: "Productividad por Equipo",
-        subtitle: `Hoy ${endDate}`,
-        content: (
-          <div className="flex flex-1 items-center">
-            <CardRow
-              big
-              cards={METRICAS_PRODUCTIVIDAD.map((m) => ({
-                label: m.label,
-                color: m.color,
-                value: fmt(totalesProductividad[m.key]),
-              }))}
-            />
-          </div>
-        ),
-      },
-      {
         title: "Líneas Pendientes Logística",
         subtitle: "Estado actual",
         content: (
@@ -215,6 +222,22 @@ export default function LogisticaCarousel() {
                 label: m.label,
                 color: m.color,
                 value: fmt(Number(snapshot?.[m.key]) || 0),
+              }))}
+            />
+          </div>
+        ),
+      },
+      {
+        title: "Productividad por Equipo",
+        subtitle: `Hoy ${endDate}`,
+        content: (
+          <div className="flex flex-1 items-center">
+            <CardRow
+              big
+              cards={METRICAS_PRODUCTIVIDAD.map((m) => ({
+                label: m.label,
+                color: m.color,
+                value: fmt(totalesProductividad[m.key]),
               }))}
             />
           </div>
@@ -241,12 +264,66 @@ export default function LogisticaCarousel() {
           </div>
         ),
       },
+      {
+        title: "Recepción",
+        subtitle: `Hoy ${endDate}`,
+        content: (
+          <div className="flex flex-1 items-center">
+            <CardRow
+              cards={RECEPCION_CARDS.map((c) => ({
+                label: c.labelCard,
+                color: c.color,
+                value: fmt(Number(recepcion?.[c.key]) || 0),
+                breakdown: c.breakdown.map((b) => ({
+                  label: b.label,
+                  value: fmt(Number(recepcion?.[b.key]) || 0),
+                })),
+              }))}
+            />
+          </div>
+        ),
+      },
+      {
+        title: "Activaciones de Gastos",
+        subtitle: "Pendientes de importación",
+        content: (
+          <div className="flex flex-1 items-center">
+            <CardRow
+              big
+              cards={ACTIVACIONES_CARDS.map((c) => ({
+                label: c.label,
+                color: c.color,
+                value: fmt(Number(activaciones?.[c.key]) || 0),
+              }))}
+            />
+          </div>
+        ),
+      },
+      {
+        title: "Factura de Compra",
+        subtitle: "Pendientes de mercadería",
+        content: (
+          <div className="flex flex-1 items-center">
+            <CardRow
+              big
+              cards={FACTURA_COMPRA_CARDS.map((c) => ({
+                label: c.label,
+                color: c.color,
+                value: fmt(Number(facturaCompra?.[c.key]) || 0),
+              }))}
+            />
+          </div>
+        ),
+      },
     ],
     [
       endDate,
       totales,
       chartData,
       totalesProductividad,
+      recepcion,
+      activaciones,
+      facturaCompra,
       snapshot,
       remitosResumenData,
     ],
@@ -319,9 +396,21 @@ function Header({ subtitle }: { subtitle: string }) {
   );
 }
 
-type CardData = { label: string; color: string; value: string };
+type CardData = {
+  label: string;
+  color: string;
+  value: string;
+  /** Desglose opcional debajo del valor (ej. Nacionales / Importados). */
+  breakdown?: { label: string; value: string }[];
+};
 
-const VALUE_SIZES = ["text-8xl", "text-7xl", "text-6xl", "text-5xl", "text-4xl"];
+const VALUE_SIZES = [
+  "text-8xl",
+  "text-7xl",
+  "text-6xl",
+  "text-5xl",
+  "text-4xl",
+];
 
 function CardRow({
   cards,
@@ -363,6 +452,23 @@ function CardRow({
           >
             {c.value}
           </p>
+          {c.breakdown && (
+            <div className="mt-6 flex flex-col gap-2 border-t border-white/15 pt-4">
+              {c.breakdown.map((b) => (
+                <div
+                  key={b.label}
+                  className="flex items-baseline justify-between gap-3"
+                >
+                  <span className="truncate text-lg font-medium uppercase tracking-wider text-white/60">
+                    {b.label}
+                  </span>
+                  <span className="text-2xl font-bold tabular-nums text-white/90">
+                    {b.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ))}
     </div>

@@ -89,6 +89,33 @@ export type productividadPorDia = {
     lineas_empaquetadas: number;
 };
 
+export type seccionRecepcion = {
+    proveedores_nacionales: number;
+    proveedores_importados: number;
+    proveedores_total: number;
+    lineas_nacional: number;
+    lineas_importado: number;
+    lineas_total: number;
+    lotes_nacional: number;
+    lotes_importado: number;
+    lotes_total: number;
+    guardadas_picking: number;
+    guardadas_almacenamiento: number;
+    guardadas_total: number;
+};
+
+export type seccionPendientesImportacion = {
+    cant_activaciones: number;
+    cant_lineas: number;
+    cant_proveedores: number;
+};
+
+export type seccionPendientesMercaderia = {
+    cant_facturas: number;
+    cant_lineas: number;
+    cant_proveedores: number;
+};
+
 export type remitoDetalle = {
     numerodocumento: string;
     fecha: string;

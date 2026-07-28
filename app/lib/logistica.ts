@@ -1,4 +1,9 @@
 import axios from "axios";
+import {
+  seccionRecepcion,
+  seccionPendientesImportacion,
+  seccionPendientesMercaderia,
+} from "@/app/utils/types";
 
 export const fetcher = (url: string) =>
   axios.get(url).then((res) => res.data);
@@ -59,6 +64,76 @@ export const METRICAS_PENDIENTES_LOG = [
   { key: "lineas_confirmadas" as const, label: "Confirmadas", color: "#06B6D4" },
   { key: "lineas_en_preparacion" as const, label: "En Preparación", color: "#8B5CF6" },
   { key: "lineas_en_empaquetado" as const, label: "En Empaquetado", color: "#F97316" },
+];
+
+/** Recepción: cada tarjeta muestra el total y su desglose (igual que el dashboard). */
+export const RECEPCION_CARDS: {
+  key: keyof seccionRecepcion;
+  label: string;
+  labelCard: string;
+  color: string;
+  breakdown: { label: string; key: keyof seccionRecepcion }[];
+}[] = [
+  {
+    key: "proveedores_total",
+    label: "Cantidad de Proveedores",
+    labelCard: "Cantidad de\nProveedores",
+    color: "#38BDF8",
+    breakdown: [
+      { label: "Nacionales", key: "proveedores_nacionales" },
+      { label: "Importados", key: "proveedores_importados" },
+    ],
+  },
+  {
+    key: "lineas_total",
+    label: "Cantidad de Líneas",
+    labelCard: "Cantidad de\nLíneas",
+    color: "#10B981",
+    breakdown: [
+      { label: "Nacional", key: "lineas_nacional" },
+      { label: "Importado", key: "lineas_importado" },
+    ],
+  },
+  {
+    key: "lotes_total",
+    label: "Lotes Generados",
+    labelCard: "Lotes\nGenerados",
+    color: "#A855F7",
+    breakdown: [
+      { label: "Nacional", key: "lotes_nacional" },
+      { label: "Importado", key: "lotes_importado" },
+    ],
+  },
+  {
+    key: "guardadas_total",
+    label: "Líneas Guardadas",
+    labelCard: "Líneas\nGuardadas",
+    color: "#F59E0B",
+    breakdown: [
+      { label: "Picking", key: "guardadas_picking" },
+      { label: "Almacenamiento", key: "guardadas_almacenamiento" },
+    ],
+  },
+];
+
+export const ACTIVACIONES_CARDS: {
+  key: keyof seccionPendientesImportacion;
+  label: string;
+  color: string;
+}[] = [
+  { key: "cant_activaciones", label: "Cantidad de Activaciones", color: "#38BDF8" },
+  { key: "cant_lineas", label: "Cantidad de Líneas", color: "#10B981" },
+  { key: "cant_proveedores", label: "Proveedores Pendientes", color: "#A855F7" },
+];
+
+export const FACTURA_COMPRA_CARDS: {
+  key: keyof seccionPendientesMercaderia;
+  label: string;
+  color: string;
+}[] = [
+  { key: "cant_facturas", label: "Cantidad de Facturas", color: "#38BDF8" },
+  { key: "cant_lineas", label: "Cantidad de Líneas", color: "#10B981" },
+  { key: "cant_proveedores", label: "Proveedores Pendientes", color: "#A855F7" },
 ];
 
 export const REMITOS_CARDS = [
