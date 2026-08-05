@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import useSWR from "swr";
 import {
   ResponsiveContainer,
@@ -18,17 +18,27 @@ import {
   seccionRecepcion,
   seccionPendientesImportacion,
   seccionPendientesMercaderia,
+  pendientesLogisticaMensual,
   ContabiliumAggregatedResponse,
+  climaActual,
+  versionApp,
 } from "@/app/utils/types";
+import { describirClima, REFRESH_CLIMA_MS } from "@/app/lib/clima";
 import {
   fetcher,
   SLIDE_MS,
   REFRESH_MS,
+  REFRESH_HISTORICO_MS,
+  REFRESH_VERSION_MS,
   RANGE_DAYS,
   getLocalDateString,
+  getMesAnteriorRange,
+  contarDiasHabiles,
   formatFechaCorta,
+  formatMesAnio,
   fmt,
   METRICAS,
+  METRICAS_MES_ANTERIOR,
   METRICAS_PRODUCTIVIDAD,
   METRICAS_PENDIENTES_LOG,
   RECEPCION_CARDS,
@@ -37,7 +47,14 @@ import {
   REMITOS_CARDS,
 } from "@/app/lib/logistica";
 
+/** Dónde se recuerda el slide en curso para sobrevivir a una recarga. */
+const SLIDE_STORAGE_KEY = "logistica:slide";
+
 const swrOpts = { refreshInterval: REFRESH_MS, revalidateOnFocus: false };
+const swrOptsHistorico = {
+  refreshInterval: REFRESH_HISTORICO_MS,
+  revalidateOnFocus: false,
+};
 
 export default function LogisticaCarousel() {
   // Rango: últimos RANGE_DAYS días, recalculado cuando cambia el día.
@@ -62,6 +79,14 @@ export default function LogisticaCarousel() {
   }, [dayTick]);
 
   const range = `?startDate=${startDate}&endDate=${endDate}`;
+
+  // Mes calendario cerrado anterior, para la sección comparativa.
+  const mesAnterior = useMemo(
+    () => getMesAnteriorRange(new Date()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dayTick],
+  );
+  const rangeMesAnterior = `?startDate=${mesAnterior.startDate}&endDate=${mesAnterior.endDate}`;
 
   const { data: estado = [] } = useSWR<estadoLineas[]>(
     `/api/logistica/estado_lineas${range}`,
@@ -100,6 +125,30 @@ export default function LogisticaCarousel() {
     fetcher,
     swrOpts,
   );
+  const { data: estadoMesAnterior = [] } = useSWR<estadoLineas[]>(
+    `/api/logistica/estado_lineas${rangeMesAnterior}`,
+    fetcher,
+    swrOptsHistorico,
+  );
+  const { data: productividadMesAnterior = [] } = useSWR<productividadPorDia[]>(
+    `/api/logistica/productividad_por_dia${rangeMesAnterior}`,
+    fetcher,
+    swrOptsHistorico,
+  );
+  const { data: contabiliumMesAnterior } =
+    useSWR<ContabiliumAggregatedResponse>(
+      `/api/facturacion/contabilium${rangeMesAnterior}`,
+      fetcher,
+      swrOptsHistorico,
+    );
+  // Foto de pendientes del mes cerrado. Devuelve null si ese mes es anterior al
+  // alta del snapshot en la BD: esa historia no existe y no se reconstruye.
+  const { data: pendientesMesAnterior } =
+    useSWR<pendientesLogisticaMensual | null>(
+      `/api/logistica/pendientes_logistica_mensual?mes=${mesAnterior.startDate}`,
+      fetcher,
+      swrOptsHistorico,
+    );
 
   // --- Agregados ---
   // Las tarjetas usan SOLO la fila de hoy; el gráfico (más abajo) usa toda la semana.
@@ -148,6 +197,66 @@ export default function LogisticaCarousel() {
       lineas_empaquetadas: Number(hoy?.lineas_empaquetadas) || 0,
     };
   }, [productividad, endDate]);
+
+  // Totales del mes cerrado anterior (suma de todas las filas diarias del período).
+  const totalesMesAnterior = useMemo(() => {
+    const facturadasContab = Object.entries(
+      contabiliumMesAnterior?.byDateCount || {},
+    ).reduce(
+      (acc, [fecha, cant]) =>
+        fecha >= mesAnterior.startDate && fecha <= mesAnterior.endDate
+          ? acc + (Number(cant) || 0)
+          : acc,
+      0,
+    );
+
+    const lineas = estadoMesAnterior.reduce(
+      (acc, row) => {
+        acc.lineas_entrantes += Number(row.lineas_entrantes) || 0;
+        acc.lineas_facturadas += Number(row.lineas_facturadas) || 0;
+        return acc;
+      },
+      { lineas_entrantes: 0, lineas_facturadas: 0 },
+    );
+
+    const prod = productividadMesAnterior.reduce(
+      (acc, row) => {
+        acc.lineas_reposicion += Number(row.lineas_reposicion) || 0;
+        acc.lineas_preparadas += Number(row.lineas_preparadas) || 0;
+        acc.lineas_empaquetadas += Number(row.lineas_empaquetadas) || 0;
+        return acc;
+      },
+      { lineas_reposicion: 0, lineas_preparadas: 0, lineas_empaquetadas: 0 },
+    );
+
+    const totales = {
+      ...lineas,
+      lineas_facturadas: lineas.lineas_facturadas + facturadasContab,
+      ...prod,
+    };
+
+    // Promedio sobre los días hábiles del calendario (lun-vie), tenga o no
+    // movimiento cada día. Solo aplica a entrantes y facturadas.
+    const diasHabiles = contarDiasHabiles(
+      mesAnterior.startDate,
+      mesAnterior.endDate,
+    );
+    const promedio = (v: number) => (diasHabiles > 0 ? v / diasHabiles : 0);
+
+    return {
+      ...totales,
+      diasHabiles,
+      promedios: {
+        lineas_entrantes: promedio(totales.lineas_entrantes),
+        lineas_facturadas: promedio(totales.lineas_facturadas),
+      },
+    };
+  }, [
+    estadoMesAnterior,
+    productividadMesAnterior,
+    contabiliumMesAnterior,
+    mesAnterior,
+  ]);
 
   // --- Definición de slides ---
   const slides = useMemo(
@@ -315,6 +424,57 @@ export default function LogisticaCarousel() {
           </div>
         ),
       },
+      {
+        title: `Resumen ${formatMesAnio(mesAnterior.endDate)}`,
+        subtitle: `Mes anterior · ${formatFechaCorta(mesAnterior.startDate)} al ${formatFechaCorta(mesAnterior.endDate)} · ${totalesMesAnterior.diasHabiles} días hábiles`,
+        content: (
+          <div className="flex min-h-0 flex-1 flex-col justify-center gap-10">
+            <Grupo title="Estado de Líneas">
+              <CardRow
+                cards={METRICAS_MES_ANTERIOR.map((m) => ({
+                  label: m.label,
+                  color: m.color,
+                  value:
+                    m.modo === "acumulado"
+                      ? fmt(totalesMesAnterior[m.key])
+                      : pendientesMesAnterior
+                        ? fmt(pendientesMesAnterior.pendientes_logistica)
+                        : "s/d",
+                  breakdown:
+                    m.modo === "acumulado"
+                      ? [
+                          {
+                            label: "Prom. día hábil",
+                            value: fmt(
+                              Math.round(totalesMesAnterior.promedios[m.key]),
+                            ),
+                          },
+                        ]
+                      : [
+                          {
+                            label: "Foto al cierre",
+                            value: pendientesMesAnterior
+                              ? formatFechaCorta(
+                                  pendientesMesAnterior.fecha_foto,
+                                )
+                              : "sin registro",
+                          },
+                        ],
+                }))}
+              />
+            </Grupo>
+            <Grupo title="Productividad por Equipo">
+              <CardRow
+                cards={METRICAS_PRODUCTIVIDAD.map((m) => ({
+                  label: m.label,
+                  color: m.color,
+                  value: fmt(totalesMesAnterior[m.key]),
+                }))}
+              />
+            </Grupo>
+          </div>
+        ),
+      },
     ],
     [
       endDate,
@@ -326,19 +486,51 @@ export default function LogisticaCarousel() {
       facturaCompra,
       snapshot,
       remitosResumenData,
+      mesAnterior,
+      totalesMesAnterior,
+      pendientesMesAnterior,
     ],
   );
 
   // --- Rotación ---
   const [index, setIndex] = useState(0);
+  const hayActualizacion = useActualizacionPendiente();
+
+  // Se recuerda el slide en curso para que cualquier recarga (deploy, F5 manual,
+  // corte de luz) retome donde estaba en vez de volver al principio.
+  const posicionRestaurada = useRef(false);
+  useEffect(() => {
+    if (!posicionRestaurada.current) {
+      posicionRestaurada.current = true;
+      const guardado = Number(sessionStorage.getItem(SLIDE_STORAGE_KEY));
+      // El módulo cubre el caso de que el deploy haya cambiado la cantidad de
+      // slides y el índice guardado ya no exista.
+      if (Number.isInteger(guardado) && guardado > 0) {
+        // Leerlo en el inicializador del useState rompería la hidratación: en el
+        // server no hay sessionStorage y el HTML sale siempre con el slide 0.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setIndex(guardado % slides.length);
+      }
+      return;
+    }
+    sessionStorage.setItem(SLIDE_STORAGE_KEY, String(index));
+  }, [index, slides.length]);
+
   // El contador se reinicia al cambiar de slide (incluida la navegación manual).
   useEffect(() => {
-    const id = setTimeout(
-      () => setIndex((i) => (i + 1) % slides.length),
-      SLIDE_MS,
-    );
+    const id = setTimeout(() => {
+      const siguiente = (index + 1) % slides.length;
+      // Con un deploy pendiente, la recarga se hace justo al cerrar la vuelta:
+      // la tele ya iba a mostrar el primer slide, así que el corte no se nota.
+      if (siguiente === 0 && hayActualizacion) {
+        sessionStorage.removeItem(SLIDE_STORAGE_KEY);
+        window.location.reload();
+        return;
+      }
+      setIndex(siguiente);
+    }, SLIDE_MS);
     return () => clearTimeout(id);
-  }, [index, slides.length]);
+  }, [index, slides.length, hayActualizacion]);
 
   const current = slides[index];
 
@@ -347,7 +539,7 @@ export default function LogisticaCarousel() {
       <Header subtitle={current.subtitle} />
 
       <section key={index} className="slide-enter flex min-h-0 flex-1 flex-col">
-        <h2 className="mb-6 text-5xl font-extrabold tracking-tight text-white">
+        <h2 className="mb-6 text-5xl font-extrabold tracking-tight text-white pt-4">
           {current.title}
         </h2>
         {current.content}
@@ -356,6 +548,37 @@ export default function LogisticaCarousel() {
       <Dots count={slides.length} active={index} onSelect={setIndex} />
     </main>
   );
+}
+
+/* ---------- Hooks ---------- */
+
+/**
+ * Avisa cuando el server pasó a servir un build distinto del que cargó esta
+ * pestaña, o sea cuando hubo un deploy. Los datos ya se refrescan solos vía SWR:
+ * lo único que obliga a recargar la página es el código nuevo, que es un evento
+ * raro. Por eso se consulta en vez de recargar a ciegas cada X minutos.
+ */
+function useActualizacionPendiente() {
+  const { data } = useSWR<versionApp>("/api/version", fetcher, {
+    refreshInterval: REFRESH_VERSION_MS,
+    revalidateOnFocus: false,
+  });
+  const versionCargada = useRef<string | null>(null);
+  const [pendiente, setPendiente] = useState(false);
+
+  useEffect(() => {
+    const version = data?.version;
+    // Sin respuesta (server caído, red cortada) no se asume nada: la tele sigue
+    // rotando con los últimos datos que tenga.
+    if (!version) return;
+    if (versionCargada.current === null) {
+      versionCargada.current = version;
+      return;
+    }
+    if (version !== versionCargada.current) setPendiente(true);
+  }, [data]);
+
+  return pendiente;
 }
 
 /* ---------- Subcomponentes de presentación ---------- */
@@ -369,19 +592,21 @@ function Header({ subtitle }: { subtitle: string }) {
 
   return (
     <header className="flex items-center justify-between border-b border-white/10 pb-5">
-      <div className="flex items-center gap-4">
-        <span className="rounded-xl bg-bulonfer-teal px-4 py-2 text-2xl font-black tracking-tight text-bulonfer-blue-500">
+      <div className="flex min-w-0 flex-1 items-center gap-4">
+        <span className="shrink-0 rounded-xl bg-bulonfer-teal px-4 py-2 text-2xl font-black tracking-tight text-bulonfer-blue-500">
           BULONFER
         </span>
-        <span className="text-2xl font-semibold text-bulonfer-teal-200">
+        {/* Cede espacio antes que el reloj y el clima si la pantalla es angosta. */}
+        <span className="truncate text-2xl font-semibold text-bulonfer-teal-200">
           Logística · {subtitle}
         </span>
       </div>
-      <div className="flex items-center gap-6">
+      <div className="flex shrink-0 items-center gap-6 pl-6">
         <span className="flex items-center gap-2 text-xl font-bold uppercase tracking-widest text-emerald-400">
           <span className="h-3 w-3 animate-pulse rounded-full bg-emerald-400" />
           En vivo
         </span>
+        <Clima />
         <span
           suppressHydrationWarning
           className="font-mono text-4xl font-bold tabular-nums"
@@ -393,6 +618,51 @@ function Header({ subtitle }: { subtitle: string }) {
         </span>
       </div>
     </header>
+  );
+}
+
+/** Clima actual del depósito (Open-Meteo). Ver `app/api/clima/route.ts`. */
+function Clima() {
+  const { data: clima } = useSWR<climaActual>("/api/clima", fetcher, {
+    refreshInterval: REFRESH_CLIMA_MS,
+    revalidateOnFocus: false,
+  });
+
+  // Sin internet o API caída no se renderiza nada: el resto del header queda igual.
+  if (!clima) return null;
+
+  const { label, Icon } = describirClima(clima.codigo, clima.esDia);
+
+  return (
+    <div className="flex items-center gap-2">
+      <Icon className="shrink-0 text-6xl text-bulonfer-teal-200" />
+      <span className="text-4xl font-bold tabular-nums">
+        {clima.temperatura}°
+      </span>
+      <span className="flex flex-col leading-tight">
+        <span className="whitespace-nowrap text-lg font-semibold uppercase tracking-wider text-bulonfer-teal-200">
+          {label}
+        </span>
+        <span className="text-lg font-medium tabular-nums text-white/60">
+          {clima.maxima}° / {clima.minima}°
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/** Encabezado de un bloque dentro de un slide que agrupa varias filas de tarjetas. */
+function Grupo({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-4">
+        <h3 className="text-2xl font-bold uppercase tracking-widest text-bulonfer-teal-200">
+          {title}
+        </h3>
+        <span className="h-px flex-1 bg-white/15" />
+      </div>
+      {children}
+    </div>
   );
 }
 

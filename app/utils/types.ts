@@ -89,6 +89,17 @@ export type productividadPorDia = {
     lineas_empaquetadas: number;
 };
 
+/**
+ * Foto mensual de pendientes de logística (gold.pendientes_logistica_mensual).
+ * `mes` es el primer día del mes; `fecha_foto` es el día del snapshot usado,
+ * que puede no ser el último del mes si ese día no hubo captura.
+ */
+export type pendientesLogisticaMensual = {
+    mes: string;
+    fecha_foto: string;
+    pendientes_logistica: number;
+};
+
 export type seccionRecepcion = {
     proveedores_nacionales: number;
     proveedores_importados: number;
@@ -139,6 +150,47 @@ export type remitosPorVendedor = {
     cantidad_lineas: number;
     valor_sin_iva: number;
     peso_total: number;
+};
+
+/** Lectura de clima ya normalizada que consume el panel. */
+export type climaActual = {
+    temperatura: number;
+    sensacion: number;
+    humedad: number;
+    viento: number;
+    /** Código WMO (`weather_code` de Open-Meteo). */
+    codigo: number;
+    esDia: boolean;
+    maxima: number;
+    minima: number;
+    /** Hora local de la lectura, en ISO sin zona ("2026-08-05T10:00"). */
+    actualizado: string;
+};
+
+/**
+ * Respuesta de `/api/version`: identifica el build que el server está sirviendo
+ * en este momento. La tele la usa para detectar deploys y recargarse sola.
+ */
+export type versionApp = {
+    version: string;
+};
+
+/** Solo los campos que se piden a Open-Meteo; la respuesta real trae más. */
+export type OpenMeteoResponse = {
+    current?: {
+        time?: string;
+        temperature_2m?: number;
+        apparent_temperature?: number;
+        relative_humidity_2m?: number;
+        is_day?: number;
+        weather_code?: number;
+        wind_speed_10m?: number;
+    } | null;
+    daily?: {
+        time?: string[];
+        temperature_2m_max?: number[];
+        temperature_2m_min?: number[];
+    } | null;
 };
 
 export type ContabiliumComprobante = {

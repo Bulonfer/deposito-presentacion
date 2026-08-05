@@ -12,6 +12,10 @@ export const fetcher = (url: string) =>
 export const SLIDE_MS = 18000;
 /** Cada cuánto se refrescan los datos (ms). La BD sincroniza cada ~15 min. */
 export const REFRESH_MS = 10 * 60 * 1000;
+/** Refresco para datos cerrados (mes anterior): ya no cambian, alcanza con revalidar de vez en cuando. */
+export const REFRESH_HISTORICO_MS = 6 * 60 * 60 * 1000;
+/** Cada cuánto la tele pregunta si se deployó una versión nueva (ms). */
+export const REFRESH_VERSION_MS = 60 * 1000;
 /** Días que cubre el gráfico de "Estado de Líneas por Día". Las tarjetas siempre usan hoy. */
 export const RANGE_DAYS = 7;
 
@@ -25,6 +29,57 @@ export const getLocalDateString = (date: Date) => {
 export const formatFechaCorta = (fecha: string) => {
   const [, m, d] = fecha.split("-");
   return `${d}/${m}`;
+};
+
+const MESES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+
+/** "2026-07-31" -> "Julio 2026". Tabla fija para que SSR y cliente rindan igual. */
+export const formatMesAnio = (fecha: string) => {
+  const [y, m] = fecha.split("-");
+  return `${MESES[Number(m) - 1]} ${y}`;
+};
+
+/**
+ * Días de lunes a viernes dentro de `[startDate, endDate]` (ambos inclusive).
+ * Solo descuenta sábados y domingos: los feriados cuentan como día hábil, y un
+ * día sin movimiento igual suma al divisor.
+ */
+export const contarDiasHabiles = (startDate: string, endDate: string) => {
+  const [ys, ms, ds] = startDate.split("-").map(Number);
+  const [ye, me, de] = endDate.split("-").map(Number);
+  const cursor = new Date(ys, ms - 1, ds);
+  const fin = new Date(ye, me - 1, de);
+  let dias = 0;
+  while (cursor <= fin) {
+    const dow = cursor.getDay();
+    if (dow !== 0 && dow !== 6) dias += 1;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dias;
+};
+
+/** Primer y último día del mes calendario anterior al de `base`. */
+export const getMesAnteriorRange = (base: Date) => {
+  const desde = new Date(base.getFullYear(), base.getMonth() - 1, 1);
+  // Día 0 del mes actual = último día del mes anterior.
+  const hasta = new Date(base.getFullYear(), base.getMonth(), 0);
+  return {
+    startDate: getLocalDateString(desde),
+    endDate: getLocalDateString(hasta),
+  };
 };
 
 export const fmt = (v: number) => Number(v || 0).toLocaleString("es-AR");
@@ -58,6 +113,22 @@ export const METRICAS_PRODUCTIVIDAD = [
   { key: "lineas_reposicion" as const, label: "Líneas Reposición", color: "#F43F5E" },
   { key: "lineas_preparadas" as const, label: "Líneas Preparadas", color: "#14B8A6" },
   { key: "lineas_empaquetadas" as const, label: "Líneas Empaquetadas", color: "#F97316" },
+];
+
+/**
+ * Comparativa del mes anterior: mismas etiquetas y colores que las secciones diarias.
+ * `modo` define de dónde sale cada valor:
+ *  - `acumulado`: suma de las filas diarias de estado_lineas (flujos reales).
+ *  - `cierre`: foto guardada en gold.pendientes_logistica_mensual. Los pendientes
+ *    son un saldo vivo, no un flujo: estado_lineas los devuelve siempre con el
+ *    valor de hoy, así que no se pueden ni sumar ni leer de ahí para un mes pasado.
+ * La entrada `cierre` no lleva `key` justamente para que no se pueda indexar
+ * por error contra los acumulados.
+ */
+export const METRICAS_MES_ANTERIOR = [
+  { key: "lineas_entrantes" as const, label: "Líneas Entrantes", color: "#38BDF8", modo: "acumulado" as const },
+  { key: "lineas_facturadas" as const, label: "Líneas Facturadas", color: "#10B981", modo: "acumulado" as const },
+  { label: "Pendientes Logística", color: "#F59E0B", modo: "cierre" as const },
 ];
 
 export const METRICAS_PENDIENTES_LOG = [
