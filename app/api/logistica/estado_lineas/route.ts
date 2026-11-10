@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import https from "https";
 import { estadoLineas } from "@/app/utils/types";
-
-const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 function formatDateYYYYMMDD(date: Date): string {
   const year = date.getFullYear();
@@ -45,7 +42,6 @@ export async function GET(request: NextRequest) {
     const url = `${apiUrl}/estado_lineas?${queryParams.toString()}`;
 
     const response = await axios.get(url, {
-      httpsAgent,
       headers: {
         apikey: apiKey,
         Authorization: `Bearer ${apiKey}`,
