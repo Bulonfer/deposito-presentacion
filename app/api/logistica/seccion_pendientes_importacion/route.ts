@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import axios from "axios";
-import https from "https";
 import { seccionPendientesImportacion } from "@/app/utils/types";
-
-const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 export async function GET() {
   const apiUrl = process.env.API_URL;
@@ -21,7 +18,6 @@ export async function GET() {
       `${apiUrl}/rpc/seccion_pendientes_importacion`,
       {},
       {
-        httpsAgent,
         headers: {
           apikey: apiKey,
           Authorization: `Bearer ${apiKey}`,

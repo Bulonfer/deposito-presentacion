@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import https from "https";
 import { pendientesLogisticaMensual } from "@/app/utils/types";
-
-const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -34,7 +31,6 @@ export async function GET(request: NextRequest) {
     const response = await axios.get(
       `${apiUrl}/pendientes_logistica_mensual?${queryParams.toString()}`,
       {
-        httpsAgent,
         headers: {
           apikey: apiKey,
           Authorization: `Bearer ${apiKey}`,
